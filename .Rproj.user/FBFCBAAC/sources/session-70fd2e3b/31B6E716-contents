@@ -1,0 +1,360 @@
+---
+title: "Activity densities"
+author: "Matt Wuensch"
+date: "4/21/2025"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Section 1: Start by uploading csv with all data and checking/cleaning things up.
+```{r}
+set.seed(63)
+library(dplyr)
+library(lme4)
+library(ggplot2)
+library(tidyr)
+library(adehabitatHS)
+
+
+
+
+gud <- read.csv("Total.guds.2.17.csv")
+
+#Change categorical data to factors instead of characters
+gud$Season <- as.factor(gud$Season)
+gud$Site <- as.factor(gud$Site)
+gud$Habitat <- as.factor(gud$Habitat)
+gud$habdist <- paste(gud$Habitat,gud$Edgedist)
+
+# Remove preliminary winter data
+gud <- gud %>%
+  filter(!Season=="winter1")
+
+#Adding a column to make guds into activity densities
+gud$activity <- 1600-gud$GUD
+gud$act.prop <- gud$activity/1600 #This gives us an activity score. Values closer to 0 mean avoidance/less use and values closer to 1 mean preference/greater use. May use, may not
+
+
+
+### Get a value for each Habitat on each transect within each site
+# SPRING
+gud.sp <- gud %>%
+  filter(Season == "spring")
+
+# Site.sect
+gud.sp$site.sect <- paste(gud.sp$Site, gud.sp$Transect)
+
+pref.sp <- gud.sp %>%
+  complete(site.sect, Habitat) %>%
+  group_by(site.sect, Habitat) %>%
+  summarise(consumed = sum(activity, na.rm = FALSE))
+pref.sp <- na.omit(pref.sp)
+
+pref.sp.wide <- spread(pref.sp, Habitat, consumed)
+
+
+
+# SUMMER
+gud.su <- gud %>%
+  filter(Season == "summer")
+
+# Site.sect
+gud.su$site.sect <- paste(gud.su$Site, gud.su$Transect)
+
+pref.su <- gud.su %>%
+  complete(site.sect, Habitat) %>%
+  group_by(site.sect, Habitat) %>%
+  summarise(consumed = sum(activity, na.rm = FALSE))
+pref.su <- na.omit(pref.su)
+
+pref.su.wide <- spread(pref.su, Habitat, consumed)
+
+
+
+# FALL
+gud.au <- gud %>%
+  filter(Season == "fall")
+
+# Site.sect
+gud.au$site.sect <- paste(gud.au$Site, gud.au$Transect)
+
+pref.au <- gud.au %>%
+  complete(site.sect, Habitat) %>%
+  group_by(site.sect, Habitat) %>%
+  summarise(consumed = sum(activity, na.rm = FALSE))
+pref.au <- na.omit(pref.au)
+
+pref.au.wide <- spread(pref.au, Habitat, consumed)
+
+
+
+# WINTER
+gud.wt <- gud %>%
+  filter(Season == "winter")
+
+# Site.sect
+gud.wt$site.sect <- paste(gud.wt$Site, gud.wt$Transect)
+
+pref.wt <- gud.wt %>%
+  complete(site.sect, Habitat) %>%
+  group_by(site.sect, Habitat) %>%
+  summarise(consumed = sum(activity, na.rm = FALSE))
+pref.wt <- na.omit(pref.wt)
+
+pref.wt.wide <- spread(pref.wt, Habitat, consumed)
+
+
+
+### Calculating selection ratios
+#Set forage availability
+forage.available.2 <- c(19200, 19200)
+
+### Naming the values
+names(forage.available.2) <- c("field", "woods")
+
+
+#### Using adehabitat hs to run a type II (Individual level, instead of each being for an individual though each is for a transect of feeders) analysis of preference. Dropping the ecotone
+(wi.sp <- widesII(pref.sp.wide[,3:4], forage.available.2, avknown = TRUE, alpha = 0.05))
+#plot(wi.sp)
+
+(wi.su <- widesII(pref.su.wide[,3:4], forage.available.2, avknown = TRUE, alpha = 0.05))
+#plot(wi.su)
+
+(wi.au <- widesII(pref.au.wide[,3:4], forage.available.2, avknown = TRUE, alpha = 0.05))
+#plot(wi.au)
+
+(wi.wt <- widesII(pref.wt.wide[,3:4], forage.available.2, avknown = TRUE, alpha = 0.05))
+#plot(wi.wt)
+
+
+#### Save the outputS as a dfS for plotting
+#Spring
+wi.sp.output <- data.frame(wi.sp$avail.prop, wi.sp$used.prop, wi.sp$wi, wi.sp$se.wi, wi.sp$ICwiupper, wi.sp$ICwilower)
+
+#### Rename column heads
+wi.sp.output <- wi.sp.output %>%
+  rename(Available = wi.sp.avail.prop, Used = wi.sp.used.prop, Wi = wi.sp.wi, SE = wi.sp.se.wi, CI.up = wi.sp.ICwiupper, CI.lo = wi.sp.ICwilower)
+
+#### Move row names to be a row instead since they're currently habs
+wi.sp.output <- tibble::rownames_to_column(wi.sp.output, "Habitat")
+
+#### Add season. Enables me to merge the dfs for graphing
+wi.sp.output <- wi.sp.output %>%
+  mutate(Season = "spring", .after = "Habitat")
+
+
+#Summer
+wi.su.output <- data.frame(wi.su$avail.prop, wi.su$used.prop, wi.su$wi, wi.su$se.wi, wi.su$ICwiupper, wi.su$ICwilower)
+
+#### Rename column heads
+wi.su.output <- wi.su.output %>%
+  rename(Available = wi.su.avail.prop, Used = wi.su.used.prop, Wi = wi.su.wi, SE = wi.su.se.wi, CI.up = wi.su.ICwiupper, CI.lo = wi.su.ICwilower)
+
+#### Move row names to be a row instead since they're currently habs
+wi.su.output <- tibble::rownames_to_column(wi.su.output, "Habitat")
+
+#### Add season. Enables me to merge the dfs for graphing
+wi.su.output <- wi.su.output %>%
+  mutate(Season = "summer", .after = "Habitat")
+
+
+#Fall
+wi.au.output <- data.frame(wi.au$avail.prop, wi.au$used.prop, wi.au$wi, wi.au$se.wi, wi.au$ICwiupper, wi.au$ICwilower)
+
+#### Rename column heads
+wi.au.output <- wi.au.output %>%
+  rename(Available = wi.au.avail.prop, Used = wi.au.used.prop, Wi = wi.au.wi, SE = wi.au.se.wi, CI.up = wi.au.ICwiupper, CI.lo = wi.au.ICwilower)
+
+#### Move row names to be a row instead since they're currently habs
+wi.au.output <- tibble::rownames_to_column(wi.au.output, "Habitat")
+
+#### Add season. Enables me to merge the dfs for graphing
+wi.au.output <- wi.au.output %>%
+  mutate(Season = "fall", .after = "Habitat")
+
+
+#Winter
+wi.wt.output <- data.frame(wi.wt$avail.prop, wi.wt$used.prop, wi.wt$wi, wi.wt$se.wi, wi.wt$ICwiupper, wi.wt$ICwilower)
+
+#### Rename column heads
+wi.wt.output <- wi.wt.output %>%
+  rename(Available = wi.wt.avail.prop, Used = wi.wt.used.prop, Wi = wi.wt.wi, SE = wi.wt.se.wi, CI.up = wi.wt.ICwiupper, CI.lo = wi.wt.ICwilower)
+
+#### Move row names to be a row instead since they're currently habs
+wi.wt.output <- tibble::rownames_to_column(wi.wt.output, "Habitat")
+
+#### Add season. Enables me to merge the dfs for graphing
+wi.wt.output <- wi.wt.output %>%
+  mutate(Season = "winter", .after = "Habitat")
+
+
+### Merge the dfs
+wi.4.outputs <- rbind(wi.sp.output, wi.su.output, wi.au.output, wi.wt.output)
+
+# Adding pref categories for coloring
+wi.4.outputs$Preference <- with(wi.4.outputs, ifelse(CI.lo > 1, "Preferred", 
+                                               ifelse(CI.up < 1, "Avoided", "Neutral")))
+# Reorder levels of your factors for the plot
+wi.4.outputs$Season <- factor(wi.4.outputs$Season, levels =c("winter", "fall", "summer", "spring"))
+wi.4.outputs$Habitat <- factor(wi.4.outputs$Habitat, levels = c("woods", "edge", "field"))
+
+
+# Setting format for your plot
+plot.format <- theme(axis.text.x = element_text(size=12),axis.text.y = element_text(size=12),
+  axis.title.x = element_text(size=14),axis.title.y = element_text(size=13),
+  panel.background = element_blank(), panel.border = element_blank(),
+  panel.grid.major = element_blank(),panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"), legend.title = element_text(face = "bold"), text = element_text(size = 12))
+
+
+
+# Build plot
+pref.plot<- ggplot(wi.4.outputs, (aes(x=Wi, y=Season, group = Habitat, shape = Habitat, color = Preference, fill = Preference))) +
+  scale_colour_manual(values = c("#A97373", "#666666", "#6F8EBA")) +
+  scale_fill_manual(values = c("#A97373", "#666666", "#6F8EBA"))+
+  geom_point(position=position_dodge(0.4), size = 8)+
+  scale_shape_manual(values = c(24,21), labels = c("Forest", "Meadow"))+
+  geom_errorbar(aes(xmin=CI.lo, xmax=CI.up), width=.0, position=position_dodge(0.4), size = 1.5) + 
+  scale_y_discrete(labels=c("Winter", "Autumn", "Summer", "Spring")) +
+  geom_vline(xintercept=1.0, color = "black", size=1) + 
+  ylab(NULL) + 
+  xlab("Selection ratio")+
+  plot.format +
+  theme(legend.key=element_blank())
+
+#ggsave("pref.plot.2.hab.png", pref.plot, units = "in", dpi = 300, height = 6, width = 9)
+
+```
+# Section 2: RDA of vegetative communities so that we can add pc1 scores to corresponding feeder types.
+```{r}
+library(vegan)
+library(ggplot2)
+library(dplyr)
+
+veg <- read.csv("VEG.RDA.clean.opg.csv")
+View(veg)
+
+# Filter out edge
+veg <- veg %>%
+  filter(!Habitat == "Edge")
+
+# Filter out spp with no scores now
+veg <- veg %>%
+  dplyr::select(-c(AGR,AHU,BBR,MHU,SDW,YAR))
+
+# Run to replicate previous rda and make sure that it works
+# Summed Percent cover by species
+veg.colsums=apply(veg[,6:96],2,sum)
+# Total percent cover per sample
+veg.rowsums=apply(veg[,6:96],1,sum)
+
+# Richness for each plot
+veg$Richness <- apply(veg[,6:96]>0,1,sum)
+
+#Simpson diversity for each plot
+veg$Simpson <- diversity(veg[,6:96],index="simpson")
+
+#Hellinger transform the data
+veg.hellinger <- cbind(veg[,1:5],decostand(veg[,6:96],method="hellinger"))
+
+
+
+# Running the RDA
+veg.rda <- rda(veg.hellinger[,6:96]~ Habitat + Condition(Site), data = veg.hellinger)
+  anova(veg.rda, by = "term") # Obtain P-value for model significance.
+	RsquareAdj(veg.rda) # Obtain Adjusted R-squar #ed value.
+	spp.good <- goodness(veg.rda, display = "species") # assessing goodness of fit for each species
+	spp.sel <- which(spp.good[,1] >= 0.25) #selecting species that have a goodness of fit of greater than 0.25
+	summary(veg.rda)
+	
+	
+	
+#Getting species scores and cleaning them up so that you can select your >.25 spp
+	spp.scores <- data.frame(scores(veg.rda, choices = c(1,2), display = "species"))
+	spp.scores$species <- rownames(spp.scores)
+	rownames(spp.scores) <- NULL
+	
+#Pulling your selected scores from spp.scores, making it into an object that you can overlay onto plot
+	sel.spp.scores <- spp.scores[c(1,3,18,20,21,69,72,73,76,77,85,86),]
+	
+# renaming species
+View(sel.spp.scores)
+str(sel.spp.scores)
+sel.spp.scores$species <- as.factor(sel.spp.scores$species)
+
+
+levels(sel.spp.scores$species) <- list("Bare ground" = "OPG", "Fraxinus spp." = "ASH", "Carex spp." = "CAR1", "Poa spp." = "CBG", "S. canadensis" = "CGR", "B. inermis" = "SB", "I. capensis" = "SJW", "J. tenuis" = "SLR", "A. odoratum" = "SVG", "R. acris" = "TBC", "P. quinquefolia" = "VRC", "T. repens" = "WC")
+
+
+RDA_data <- cbind(veg, scores(veg.rda, choices = c(1,2), display = "sites")) # Extract linear coefficients.
+
+RDA_var <- eigenvals(veg.rda)/sum(eigenvals(veg.rda)) # % var explained by each ordination axis. Use these numbers in the axis labels.
+
+theme_PCA <- theme_classic() +
+		theme(aspect.ratio = 1, axis.title = (element_text(size = 12)), legend.title = element_text(face = "bold"), legend.position = "top", text = element_text(size = 10), legend.background = element_blank(), legend.box.background = element_rect(colour = "black"), axis.text = element_text(size = 12))
+
+library(ggrepel) 
+
+veg.rda.plot.enviro.spp <- ggplot(RDA_data, aes(x = RDA1 , y = PC1)) + 
+  theme_PCA + 
+  geom_point(data = RDA_data, aes(fill= Habitat, shape = Site), size = 6, alpha =.55) +
+  labs(x = "RDA1 (29.77%)", y = "PC1 (11.71%)", color = "Site", shape = "Site") +
+  scale_shape_manual(values = c(21,22,24),labels = c("Chandler 1", "Chandler 2", "Hinckley")) +
+  scale_fill_manual(values = c("#A9AEB2", "#71610C"), labels = c("Meadow", "Forest")) +
+  guides(fill = guide_legend(override.aes=list(shape=21))) +
+  ylim(min(RDA_data$PC1)*1.1, max(RDA_data$PC1)) +
+  xlim(min(RDA_data$RDA1)*1.68, max(RDA_data$RDA1)*1.4) +
+  geom_segment(aes(x = 0, y = 0, xend = RDA1, yend = PC1), data = sel.spp.scores, size =1, alpha = 0.95, colour = "grey30") +
+   geom_text_repel(data = sel.spp.scores, aes(x = RDA1, y = PC1, label = species), colour = "black", fontface = "bold", size = 3.5) 
+
+dev.new()
+veg.rda.plot.enviro.spp
+
+ggsave("2.Habitat.RDA.png", veg.rda.plot.enviro.spp, units = "mm", dpi = 300, width = 174, height = 174)
+
+
+
+# Exporting RDA and PC1 scores for all species as a supplemental table
+#write.csv(spp.scores, "rda.spp.scores2.csv")
+
+#### Coloring informaion ####
+#install.packages("NatParksPalettes")
+library(NatParksPalettes)
+# Color scale you'll want is triglav, 12 options, continuous
+tri <- natparks.pals(name = "Triglav", n = 12, type = "continuous")
+
+# Hex colors are
+triglav.hex <- c("#376EC1", "#6F8EBA", "#A9AEB2", "#A97373", "#9E2024", "#8A1907", "#714308", "#71610C", "#996B16", "#AC6E25", "#65533D", "#203958")
+
+# function to show color palette you wrote out
+show_colors <- function(colors) { 
+  ggplot(data.frame(id=seq_along(colors), color=colors)) + 
+    geom_tile(aes(id, 1, fill=color)) + 
+    scale_fill_identity()
+}
+
+show_colors(triglav.hex)
+tri <- natparks.pals(name = "Triglav")
+
+	
+	
+  ####        Look into doing isodars per burt's suggestion.
+	
+	#### Can add Nudds info as well and use it to support some of the predator stuff. coyotes use low cover, tree stands are obscured by high cover... maybe idk. I'm willing to try BEAS, but if that doesn't work it's either Ohio Journal of Science or Royal society open science for this.
+
+```
+Code for csv for review process
+```{r}
+pref.sp.wide$season <- "spring"
+pref.wt.wide$season <- "winter"
+pref.su.wide$season <- "summer"
+pref.au.wide$season <- "autumn"
+
+write.csv(pref.sp.wide, "spring.dat.csv")
+write.csv(pref.wt.wide, "winter.dat.csv")
+write.csv(pref.su.wide, "summer.dat.csv")
+write.csv(pref.au.wide, "autumn.dat.csv")
+
+```
+```
